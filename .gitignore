@@ -1,0 +1,30 @@
+# Python
+automation/venv/
+__pycache__/
+*.pyc
+
+# Node.js
+backend/node_modules/
+backend/dist/
+
+# React
+frontend/node_modules/
+frontend/dist/
+
+# Data
+data/xiaohongshu.db
+data/chroma/
+
+# Env
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.dbvenv/
+__pycache__/
+.DS_Store
+*.pyc

@@ -1,0 +1,6 @@
+DrissionPage>=4.0
+openai>=1.0
+chromadb>=0.4
+schedule>=1.2
+flask>=3.0
+python-dotenv>=1.0
