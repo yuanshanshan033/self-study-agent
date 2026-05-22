@@ -1,7 +1,14 @@
 import Database, { Database as DatabaseType } from "better-sqlite3";
 import path from "path";
+import fs from "fs";
 
 const DB_PATH = process.env.SQLITE_PATH || path.resolve(__dirname, "..", "..", "..", "data", "xiaohongshu.db");
+
+// 确保数据库目录存在
+const dbDir = path.dirname(DB_PATH);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 
 const db: DatabaseType = new Database(DB_PATH);
 

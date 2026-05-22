@@ -1,15 +1,20 @@
 import json
 import random
+import sys
+import os
+
+# 添加 vendor 目录到 Python 路径
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
+
 import schedule
 import sqlite3
-import sys
 import time
 from datetime import datetime
 import browser
 import analyzer
 import summarizer
 import chroma_store
-from config import MAX_DAILY_LIKES, MAX_DAILY_BOOKMARKS, MAX_BROWSING_MINUTES, SQLITE_PATH
+from config import MAX_DAILY_LIKES, MAX_DAILY_BOOKMARKS, MAX_BROWSING_MINUTES, SQLITE_PATH, FEED_COUNT_FOR_PROFILE
 
 
 class DailyTask:
@@ -36,8 +41,8 @@ class DailyTask:
         if self.profile:
             return True
 
-        print("\n📋 未找到用户画像，先采集前50篇帖子生成画像...")
-        feed_items = browser.collect_feed_items(self.page, count=50)
+        print(f"\n📋 未找到用户画像，先采集前{FEED_COUNT_FOR_PROFILE}篇帖子生成画像...")
+        feed_items = browser.collect_feed_items(self.page, count=FEED_COUNT_FOR_PROFILE)
         if len(feed_items) < 10:
             print(f"❌ 采集到的帖子太少({len(feed_items)}篇)")
             return False
@@ -347,7 +352,7 @@ def main():
         try:
             page = browser.init_browser()
             if browser.wait_for_login(page):
-                feed_items = browser.collect_feed_items(page, count=50)
+                feed_items = browser.collect_feed_items(page, count=FEED_COUNT_FOR_PROFILE)
                 if len(feed_items) >= 10:
                     profile = analyzer.generate_profile(feed_items)
                     success = bool(profile)

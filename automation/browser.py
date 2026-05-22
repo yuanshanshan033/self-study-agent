@@ -112,36 +112,95 @@ def init_browser():
     return page
 
 
-def wait_for_login(page, check_interval=3):
-    """等待用户手动登录"""
+def wait_for_login(page, check_interval=3, max_wait_minutes=15):
+    """等待用户手动登录，支持自动检测和随时手动确认"""
     print("=" * 50)
     print("请在浏览器中完成小红书登录（扫码/手机号均可）")
     print("登录成功后程序将自动继续...")
+    print("提示：按回车后输入 y 可手动确认登录（15分钟内）")
     print("=" * 50)
 
     logged = False
-    retries = 0
-    while not logged and retries < 120:
+    start_time = time.time()
+    max_wait_seconds = max_wait_minutes * 60
+    last_prompt_time = 0
+
+    while not logged:
+        # 检查是否超时
+        elapsed = time.time() - start_time
+        if elapsed > max_wait_seconds:
+            print("\n⚠️  等待超时（15分钟），请重新运行程序")
+            break
+
+        # 检查自动检测条件（方法1或方法4满足其一即可）
         try:
             url = page.url.lower()
             if "explore" in url or "recommend" in url:
+                # 检测方法1：检查登录弹窗是否消失
                 try:
                     login_modal = page.wait.ele_displayed(".login-container", timeout=1)
                     if login_modal is None:
                         logged = True
+                        print("✅ 检测方式1：登录弹窗已消失")
                 except Exception:
-                    logged = True
+                    pass
+
+                # 检测方法4：检查左侧登录按钮消失 + 用户头像/"我"出现
+                if not logged:
+                    try:
+                        login_btn = page.ele("text=登录", timeout=1)
+                        has_login_btn = login_btn is not None
+                    except Exception:
+                        has_login_btn = False
+
+                    try:
+                        user_avatar = page.ele(".avatar", timeout=1) or page.ele("[class*='avatar']", timeout=1)
+                        has_user_avatar = user_avatar is not None
+                    except Exception:
+                        has_user_avatar = False
+
+                    try:
+                        me_text = page.ele("text=我", timeout=1)
+                        has_me_text = me_text is not None
+                    except Exception:
+                        has_me_text = False
+
+                    if not has_login_btn and (has_user_avatar or has_me_text):
+                        logged = True
+                        print(f"✅ 检测方式4：登录按钮消失，检测到用户标识")
         except Exception:
             pass
 
-        if not logged:
-            retries += 1
+        if logged:
+            break
+
+        # 每10秒提示一次
+        if int(elapsed) - last_prompt_time >= 10:
+            print(f"⏳ 已等待 {int(elapsed)} 秒，按回车输入 y 确认登录")
+            last_prompt_time = int(elapsed)
+
+        # 使用select实现非阻塞输入检查
+        try:
+            import select
+            import sys
+            # 检查是否有输入（等待1秒）
+            ready, _, _ = select.select([sys.stdin], [], [], 1)
+            if ready:
+                user_input = sys.stdin.readline().strip().lower()
+                if user_input in ['y', 'yes']:
+                    logged = True
+                    print("✅ 手动确认登录成功")
+                    break
+                elif user_input in ['n', 'no']:
+                    print("❌ 登录确认失败")
+                    return False
+        except (ImportError, Exception):
+            # 如果不支持select，使用普通sleep
             time.sleep(check_interval)
 
     if logged:
-        print("✅ 登录检测成功，开始浏览...\n")
-    else:
-        print("⚠️  超时未检测到登录成功，请确认登录状态后重试")
+        print("✅ 登录检测成功，开始生成用户画像...")
+        print("⏱️  将在15分钟内爬取50篇笔记\n")
     return logged
 
 
@@ -162,17 +221,25 @@ def collect_feed_items(page, count=FEED_COUNT_FOR_PROFILE):
     返回: [{title, cover_url}, ...]
     """
     print(f"📋 开始采集 {count} 篇帖子的标题和封面信息...")
+    print("  [模拟浏览] 提示：请勿手动滚动，程序将自动模拟滚动浏览...")
     collected = []
     seen_titles = set()
     last_items_count = 0
     stale_count = 0
+    max_scroll_attempts = 50
+    scroll_attempts = 0
 
-    while len(collected) < count:
+    while len(collected) < count and scroll_attempts < max_scroll_attempts:
         human_scroll(page)
+        scroll_attempts += 1
+        human_pause(1.0, 2.0)
+
         post_count = discover_post_count(page)
+        print(f"  📊 当前页面帖子数: {post_count}, 已采集: {len(collected)}")
+
         if post_count == last_items_count:
             stale_count += 1
-            if stale_count > 8:
+            if stale_count > 5:
                 print("  ⚠️  页面内容不再更新，可能已到底")
                 break
         else:
@@ -182,24 +249,45 @@ def collect_feed_items(page, count=FEED_COUNT_FOR_PROFILE):
         try:
             note_items = page.eles(".note-item")
             if not note_items:
+                print("  ⚠️  未找到 .note-item 元素，尝试其他选择器...")
+                note_items = page.eles('div[data-v-]') or page.eles('a[href*="/explore/"]')
+
+            if not note_items:
+                print("  ⚠️  仍未找到笔记元素，继续滚动...")
                 continue
+
+            print(f"  📝 找到 {len(note_items)} 个笔记元素")
+
             for item in note_items:
                 if len(collected) >= count:
                     break
-                try:
-                    title_ele = item.wait.ele_displayed(".title", timeout=1)
-                    title = title_ele.text if title_ele else ""
-                    if not title:
-                        title_ele = item.wait.ele_displayed(".footer .title", timeout=1)
-                        title = title_ele.text if title_ele else ""
-                except Exception:
-                    title = ""
 
-                if not title.strip():
+                title = ""
+
+                if not title:
+                    try:
+                        footer = item.ele(".footer", timeout=1)
+                        if footer:
+                            title = footer.text.strip()
+                    except Exception:
+                        pass
+
+                if not title:
                     try:
                         title = item.attr("aria-label") or ""
                     except Exception:
-                        title = ""
+                        pass
+
+                if not title:
+                    try:
+                        spans = item.eles("span")
+                        for span in spans:
+                            text = span.text.strip()
+                            if text and len(text) > 5:
+                                title = text
+                                break
+                    except Exception:
+                        pass
 
                 if not title.strip():
                     continue
@@ -207,19 +295,26 @@ def collect_feed_items(page, count=FEED_COUNT_FOR_PROFILE):
                     continue
 
                 seen_titles.add(title.strip())
+
+                cover_url = ""
                 try:
-                    cover_ele = item.wait.ele_displayed(".cover img", timeout=1)
-                    cover_url = cover_ele.attr("src") if cover_ele else ""
+                    cover_ele = item.ele(".cover img", timeout=1)
+                    if cover_ele:
+                        cover_url = cover_ele.attr("src") or ""
                 except Exception:
-                    cover_url = ""
+                    pass
 
                 collected.append({"title": title.strip(), "cover_url": cover_url})
-                human_pause(1.0, 3.0)
+                print(f"  ✅ 采集第 {len(collected)} 条: {title.strip()[:30]}...")
+                human_pause(0.5, 1.5)
 
         except Exception as e:
             print(f"  ⚠️  采集过程中出现异常: {e}")
+            import traceback
+            traceback.print_exc()
 
-        batch_rest(len(collected))
+        if len(collected) < count:
+            batch_rest(len(collected))
 
     print(f"✅ 采集完成，共获取 {len(collected)} 条帖子信息")
     return collected[:count]

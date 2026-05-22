@@ -1,4 +1,9 @@
 import os
+import sys
+
+# 添加 vendor 目录到 Python 路径
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
+
 import chromadb
 from chromadb.config import Settings
 from config import CHROMA_PATH

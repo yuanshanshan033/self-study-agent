@@ -2,7 +2,9 @@ import json
 import sys
 import os
 
+# 添加 vendor 目录到 Python 路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
 
 from flask import Flask, request, Response
 from config import CHROMA_SERVER_PORT

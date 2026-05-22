@@ -44,7 +44,7 @@ def call_deepseek(messages, temperature=0.7, response_format=None, max_retries=3
 
 def generate_profile(feed_items):
     """
-    根据前 50 篇帖子生成用户画像
+    根据采集的帖子生成用户画像
     输入: [{"title", "cover_url"}, ...]
     输出: JSON格式的画像
     """
