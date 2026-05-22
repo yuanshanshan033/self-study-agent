@@ -43,6 +43,14 @@ def human_scroll(page):
         human_pause(0.5, 1.5)
 
 
+def scroll_to_next_note(page):
+    """滚动到下一个笔记（滚动一个笔记卡片的高度）"""
+    # 笔记卡片高度大约是 300-400px，滚动 400px 确保看到下一个
+    scroll_distance = random.randint(350, 450)
+    page.scroll.down(scroll_distance)
+    human_pause(1.5, 3.0)
+
+
 def human_mouse_move(page, target_x, target_y):
     """贝塞尔曲线移动鼠标到目标坐标"""
     current_pos = page.actions.move_to
@@ -325,62 +333,82 @@ def get_page_content(page):
     title = ""
     content = ""
     images = []
+    tags = []
     url = page.url
 
-    try:
-        title_ele = page.wait.ele_displayed("#detail-title", timeout=2)
-        title = title_ele.text if title_ele else ""
-    except Exception:
-        pass
+    # 等待详情页加载完成
+    time.sleep(2)
 
-    if not title:
+    # 调试：打印当前URL
+    print(f"  🔍 当前URL: {url}")
+
+    # 获取标题 - 尝试多种可能的选择器
+    title_selectors = [".title", "h1.title", ".note-title", "[class*='title']"]
+    for selector in title_selectors:
         try:
-            title_ele = page.wait.ele_displayed(".info .title", timeout=2)
-            title = title_ele.text if title_ele else ""
-        except Exception:
+            title_ele = page.ele(selector, timeout=1)
+            if title_ele:
+                title = title_ele.text
+                if title.strip():
+                    print(f"  ✅ 标题选择器匹配: {selector}")
+                    break
+        except Exception as e:
             pass
 
+    # 获取内容 - 尝试多种可能的选择器
+    content_selectors = [".desc", ".content", ".note-content", ".text", "[class*='desc']", "[class*='content']"]
+    for selector in content_selectors:
+        try:
+            content_ele = page.ele(selector, timeout=1)
+            if content_ele:
+                content = content_ele.text
+                if content.strip():
+                    print(f"  ✅ 内容选择器匹配: {selector}")
+                    break
+        except:
+            pass
+
+    # 获取图片 - 尝试多种可能的选择器
+    img_selectors = [".note-slider-img", "img", ".image img", ".slider img", ".note-image"]
+    for selector in img_selectors:
+        try:
+            img_eles = page.eles(selector, timeout=1)
+            if img_eles:
+                for img in img_eles[:6]:
+                    src = img.attr("src") or img.attr("data-src") or ""
+                    if src:
+                        images.append(src)
+                if images:
+                    print(f"  ✅ 图片选择器匹配: {selector}, 找到 {len(images)} 张")
+                    break
+        except:
+            pass
+
+    # 获取话题标签
     try:
-        content_ele = page.wait.ele_displayed("#detail-desc", timeout=2)
-        content = content_ele.text if content_ele else ""
-    except Exception:
+        tag_eles = page.eles(".tag", timeout=1)
+        for tag in tag_eles:
+            tag_text = tag.text
+            if tag_text:
+                tags.append(tag_text)
+    except:
         pass
 
-    if not content:
+    # 调试输出
+    if not title and not content and not images:
+        print(f"  ⚠️  未获取到内容，尝试打印页面结构...")
         try:
-            content_ele = page.wait.ele_displayed(".desc", timeout=2)
-            content = content_ele.text if content_ele else ""
-        except Exception:
-            content = ""
-
-    try:
-        img_eles = page.eles(".swiper-slide img")
-        if not img_eles:
-            img_eles = page.eles(".note-image img")
-        if img_eles:
-            for img in img_eles[:6]:
-                src = img.attr("src") or img.attr("data-src") or ""
-                if src:
-                    images.append(src)
-    except Exception:
-        pass
-
-    if not images:
-        try:
-            all_imgs = page.eles("img")
-            for img in all_imgs:
-                src = img.attr("src") or ""
-                if src and ("xhslink" in src or "pic" in src.lower() or "image" in src.lower()):
-                    images.append(src)
-                    if len(images) >= 6:
-                        break
-        except Exception:
+            # 尝试获取页面所有文本
+            body_text = page.ele("body").text[:200]
+            print(f"  📝 页面文本前200字: {body_text}...")
+        except:
             pass
 
     return {
         "title": title,
         "content": content,
         "images": images,
+        "tags": tags,
         "url": url,
     }
 
@@ -388,10 +416,58 @@ def get_page_content(page):
 def click_note(page, note_element):
     """点击帖子进入详情页"""
     try:
-        human_click(page, note_element)
-        human_pause(2.0, 4.0)
-        page.wait.load_complete(timeout=5)
-        return True
+        # 检查元素是否有效
+        if note_element is None:
+            print("  ⚠️  点击笔记失败: 元素为空")
+            return False
+
+        # 记录点击前的URL
+        original_url = page.url
+        print(f"  🔍 点击前URL: {original_url}")
+
+        # 尝试1: 使用 JavaScript 点击（最可靠）
+        try:
+            page.run_js("arguments[0].click();", note_element)
+            human_pause(2.0, 4.0)
+            # 等待页面跳转
+            time.sleep(5)
+            # 检查URL是否变化
+            if page.url != original_url:
+                print(f"  ✅ 点击成功 (JS)，URL已变化: {page.url}")
+                return True
+            else:
+                print(f"  ⚠️  JS点击后URL未变化")
+        except Exception as e:
+            print(f"  ⚠️  JS点击失败: {e}")
+
+        # 尝试2: 拟人化点击
+        try:
+            if human_click(page, note_element):
+                human_pause(2.0, 4.0)
+                time.sleep(5)
+                if page.url != original_url:
+                    print(f"  ✅ 点击成功 (拟人)，URL已变化: {page.url}")
+                    return True
+                else:
+                    print(f"  ⚠️  拟人点击后URL未变化")
+        except Exception as e:
+            print(f"  ⚠️  拟人点击失败: {e}")
+
+        # 尝试3: 直接点击
+        try:
+            note_element.click()
+            human_pause(2.0, 4.0)
+            time.sleep(5)
+            if page.url != original_url:
+                print(f"  ✅ 点击成功 (直接)，URL已变化: {page.url}")
+                return True
+            else:
+                print(f"  ⚠️  直接点击后URL未变化")
+        except Exception as e:
+            print(f"  ⚠️  直接点击失败: {e}")
+
+        print("  ⚠️  点击笔记失败: 所有点击方式都未成功")
+        return False
     except Exception as e:
         print(f"  ⚠️  点击笔记失败: {e}")
         return False

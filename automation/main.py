@@ -34,6 +34,10 @@ class DailyTask:
         self.bookmark_probability = 0.6
         self.interact_cooldown = 0
         self.posts_since_last_interact = 0
+        # 新增：类别计数器（每个画像类别单独计数）
+        self.category_counters = {}
+        # 新增：总笔记计数器（用于收藏判断）
+        self.total_notes_checked = 0
 
     def _ensure_profile(self):
         """确保用户画像存在"""
@@ -72,32 +76,75 @@ class DailyTask:
         """cooling 期必须浏览 2 篇其他帖子后才能下一次互动"""
         return self.posts_since_last_interact >= 2
 
-    def _get_feed_titles(self):
-        """从当前发现页提取所有可见帖子的标题和元素"""
-        items = []
+    def _get_first_note_title(self):
+        """从当前发现页提取第一个可见笔记的标题"""
         try:
+            # 小红书发现页笔记选择器
             note_items = self.page.eles(".note-item")
             if not note_items:
-                return items
-            for item in note_items:
+                # 尝试其他可能的选择器
+                note_items = self.page.eles("[class*='note']")
+            
+            if not note_items:
+                return None
+                
+            # 只取第一个笔记
+            first_item = note_items[0]
+            
+            # 获取标题 - 尝试多种选择器
+            title = ""
+            try:
+                title_ele = first_item.ele(".title", timeout=1)
+                title = title_ele.text if title_ele else ""
+            except:
+                pass
+            
+            if not title.strip():
                 try:
-                    title_ele = item.wait.ele_displayed(".title", timeout=1)
+                    title_ele = first_item.ele(".footer .title", timeout=1)
                     title = title_ele.text if title_ele else ""
-                    if not title.strip():
-                        title_ele = item.wait.ele_displayed(".footer .title", timeout=1)
-                        title = title_ele.text if title_ele else ""
-                except Exception:
-                    title = ""
-                items.append({"element": item, "title": title.strip()})
-        except Exception:
+                except:
+                    pass
+            
+            if not title.strip():
+                try:
+                    footer = first_item.ele(".footer", timeout=1)
+                    if footer:
+                        title = footer.text[:50]
+                except:
+                    pass
+
+            if title.strip():
+                return title.strip()
+            
+        except Exception as e:
+            print(f"  ⚠️  获取笔记标题失败: {e}")
+        return None
+
+    def _find_note_by_title(self, title):
+        """根据标题在当前页面重新查找笔记元素"""
+        try:
+            all_items = self.page.eles(".note-item")
+            for item in all_items:
+                try:
+                    title_ele = item.ele(".title", timeout=1)
+                    if title_ele and title in title_ele.text:
+                        return item
+                except:
+                    pass
+                # 尝试从footer找
+                try:
+                    footer = item.ele(".footer", timeout=1)
+                    if footer and title in footer.text:
+                        return item
+                except:
+                    pass
+        except:
             pass
-        return items
+        return None
 
-    def _handle_note(self, item):
-        """处理单篇帖子：初判 → （不感兴趣就跳过） → 进详情 → 二次判断 → 互动"""
-        title = item["title"]
-        element = item["element"]
-
+    def _handle_note_by_title(self, title):
+        """处理单篇帖子：初判 → （不感兴趣就跳过） → 进详情 → 按规则互动"""
         if not title:
             return
 
@@ -108,10 +155,18 @@ class DailyTask:
             print(f"  ⌛ 不感兴趣 (评分:{interest.get('interest_score', 0)})，跳过")
             return
 
-        print(f"  ✅ 感兴趣 (评分:{interest.get('interest_score')})，进入详情页...")
+        # 获取匹配的画像类别
+        matched_category = interest.get("matched_category", "其他")
+        print(f"  ✅ 感兴趣 (类别:{matched_category})，进入详情页...")
         browser.human_pause(2.0, 5.0)
 
-        if not browser.click_note(self.page, element):
+        # 每次点击前都重新查找元素（避免元素失效）
+        click_target = self._find_note_by_title(title)
+        if not click_target:
+            print(f"  ⚠️  无法找到该笔记元素，可能已滚动出视图")
+            return
+
+        if not browser.click_note(self.page, click_target):
             print("  ⚠️  点击详情失败")
             return
 
@@ -121,41 +176,42 @@ class DailyTask:
 
         browser.human_pause(5.0, 12.0)
 
-        action_result = analyzer.judge_action(self.profile, detail)
-        action = action_result.get("action", "none")
-        print(f"  🧠 AI判断: {action}，原因: {action_result.get('reason', '')}")
+        # 更新计数器
+        self.total_notes_checked += 1
 
-        if action not in ("like", "bookmark"):
-            print("  ⌛ 最终决定不互动")
+        # 类别计数器：每个类别单独计数
+        if matched_category not in self.category_counters:
+            self.category_counters[matched_category] = 0
+        self.category_counters[matched_category] += 1
+        category_count = self.category_counters[matched_category]
+
+        # 判断是否应该点赞（每3个同类笔记点赞一次）
+        should_like = (category_count % 3 == 0)
+
+        # 判断是否应该收藏（每5个笔记收藏一次）
+        should_bookmark = (self.total_notes_checked % 5 == 0)
+
+        print(f"  📊 类别计数:{category_count} | 总计数:{self.total_notes_checked}")
+        print(f"  🎯 点赞规则:每3个同类笔记点赞一次 {'✅' if should_like else '⏳'}")
+        print(f"  🎯 收藏规则:每5个笔记收藏一次 {'✅' if should_bookmark else '⏳'}")
+
+        if not should_like:
+            print("  ⌛ 未达到点赞条件，跳过")
             browser.close_detail(self.page)
             browser.human_pause(2.0, 5.0)
-            self.posts_since_last_interact += 1
             return
 
-        if not self._can_interact():
-            print("  ⌛ 互动冷却期，跳过互动")
-            browser.close_detail(self.page)
-            browser.human_pause(2.0, 5.0)
-            self.posts_since_last_interact += 1
-            return
-
-        if not self._should_like():
-            print("  ⌛ AI建议点赞，但概率决定不执行（模拟忘记点赞）")
-            browser.close_detail(self.page)
-            browser.human_pause(2.0, 5.0)
-            self.posts_since_last_interact += 1
-            return
-
+        # 执行点赞
         print("  ❤️  执行点赞...")
         if browser.do_like(self.page):
             self.like_count += 1
-            self.posts_since_last_interact = 0
             print(f"  点赞成功！今日已点赞: {self.like_count}/{MAX_DAILY_LIKES}")
 
+        # 执行收藏（如果满足条件）
         bookmark_executed = False
-        if action == "bookmark" and self._should_bookmark():
+        if should_bookmark:
             browser.human_pause(2.0, 4.0)
-            print("  ⭐ 兴趣极高，执行收藏...")
+            print("  ⭐ 满足收藏条件，执行收藏...")
             if browser.do_bookmark(self.page):
                 self.bookmark_count += 1
                 bookmark_executed = True
@@ -169,8 +225,9 @@ class DailyTask:
             "url": detail["url"],
             "action_type": action_type,
             "interest_score": interest.get("interest_score", 0),
-            "ai_reason": action_result.get("reason", ""),
+            "ai_reason": interest.get("reason", ""),
             "post_title": title,
+            "matched_category": matched_category,
         })
 
         browser.human_pause(3.0, 8.0)
@@ -243,38 +300,61 @@ class DailyTask:
         print(f"\n📊 当前用户画像: {', '.join(self.profile.get('preferred_categories', [])[:5])}")
         print("🔄 进入持续浏览 + 互动模式...\n")
 
-        last_items_count = 0
-        stale_rounds = 0
+        processed_titles = set()  # 记录已处理的笔记标题，避免重复
+        current_title = None  # 当前正在处理的笔记标题
+        skip_count = 0  # 连续跳过同一笔记的次数
 
         while not self._is_limit_reached() and not self._is_time_up():
-            browser.human_scroll(self.page)
-            browser.batch_rest(self.like_count)
+            # 只获取第一个可见笔记的标题
+            title = self._get_first_note_title()
 
-            items = self._get_feed_titles()
-            all_titles = [item["title"] for item in items if item["title"]]
-
-            if len(all_titles) == last_items_count:
-                stale_rounds += 1
-                if stale_rounds > 10:
+            if not title:
+                # 没有获取到标题，滚动页面
+                skip_count += 1
+                if skip_count > 10:
                     print("⚠️  页面长时间无新内容，结束浏览")
                     break
-            else:
-                stale_rounds = 0
-            last_items_count = len(all_titles)
+                print("  📜 滚动页面寻找新笔记...")
+                browser.human_scroll(self.page)
+                browser.human_pause(2.0, 4.0)
+                continue
 
-            for item in items:
-                if self._is_limit_reached() or self._is_time_up():
-                    break
-                self._handle_note(item)
-                browser.human_pause(3.0, 8.0)
+            # 如果获取到的标题和当前标题一样，说明还在同一个笔记上
+            # 需要滚动到下一个
+            if title == current_title:
+                skip_count += 1
+                if skip_count > 5:
+                    print(f"  ⏭️  该笔记已处理，滚动到下一个: {title[:30]}...")
+                    browser.scroll_to_next_note(self.page)
+                    skip_count = 0
+                continue
 
+            # 重置 skip_count
+            skip_count = 0
+
+            # 记录当前标题
+            current_title = title
+
+            # 检查是否已处理过（从详情页返回后，可能还是同一个笔记）
+            if title in processed_titles:
+                print(f"  ⏭️  该笔记已处理过，滚动到下一个: {title[:30]}...")
+                browser.scroll_to_next_note(self.page)
+                continue
+
+            # 记录已处理
+            processed_titles.add(title)
+
+            # 处理这一篇笔记（进入详情页 → 分析 → 点赞/跳过 → 返回发现页）
+            self._handle_note_by_title(title)
+
+            # 显示进度
             items_remaining = MAX_DAILY_LIKES - self.like_count
             print(f"\n📊 进度: 点赞 {self.like_count}/{MAX_DAILY_LIKES} | "
                   f"收藏 {self.bookmark_count}/{MAX_DAILY_BOOKMARKS} | "
                   f"还需{items_remaining}个点赞或到时结束")
 
-            if stale_rounds > 5:
-                browser.take_break(60, 180)
+            # 返回发现页后，短暂休息继续处理下一个
+            browser.human_pause(2.0, 4.0)
 
         self._print_summary()
 
