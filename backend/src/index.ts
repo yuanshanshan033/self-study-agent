@@ -14,6 +14,10 @@ const PORT = process.env.NODE_PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// 提供截图文件的静态访问
+const screenshotsDir = process.env.SCREENSHOTS_DIR || path.resolve(__dirname, "..", "..", "data", "screenshots");
+app.use("/screenshots", express.static(screenshotsDir));
+
 app.use("/api/notes", notesRouter);
 app.use("/api/chat", chatRouter);
 

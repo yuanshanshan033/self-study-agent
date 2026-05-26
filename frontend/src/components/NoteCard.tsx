@@ -3,23 +3,24 @@ import { formatNumber } from "../api";
 
 interface NoteCardProps {
   note: Note;
+  onClick?: (note: Note) => void;
 }
 
 /**
  * 笔记卡片组件
  * 显示笔记封面、标题、摘要和统计数据
  */
-export function NoteCard({ note }: NoteCardProps) {
+export function NoteCard({ note, onClick }: NoteCardProps) {
   // 获取笔记摘要（优先使用AI摘要，否则使用原文前100字）
   const getSummary = () => {
     const aiSummary = note.ai_summary ?? "";
-    const originalContent = note.original_content ?? "";
+    const text = note.text ?? "";
 
     if (aiSummary) {
       return aiSummary.slice(0, 80) + "...";
     }
-    if (originalContent) {
-      return originalContent.slice(0, 80) + "...";
+    if (text) {
+      return text.slice(0, 80) + "...";
     }
     return "暂无内容摘要";
   };
@@ -27,14 +28,17 @@ export function NoteCard({ note }: NoteCardProps) {
   // 获取封面图URL
   const getCoverUrl = () => {
     if (note.cover_url) {
+      // 如果是截图路径（以 /screenshots/ 开头），拼接后端地址
+      if (note.cover_url.startsWith("/screenshots/")) {
+        return `http://localhost:3001${note.cover_url}`;
+      }
       return note.cover_url;
     }
-    // 默认占位图
     return "https://via.placeholder.com/300x200/2a2a3e/ffffff?text=No+Image";
   };
 
   return (
-    <div className="note-card">
+    <div className="note-card" onClick={() => onClick?.(note)}>
       {/* 封面图 */}
       <div className="note-card-cover">
         <img src={getCoverUrl()} alt={note.title} loading="lazy" />

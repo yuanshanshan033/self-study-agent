@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { Note } from "../types";
 import { fetchNotes } from "../api";
 import { NoteCard } from "./NoteCard";
+import { NoteDetailModal } from "./NoteDetailModal";
 
 /**
  * 笔记库组件
@@ -13,6 +14,7 @@ export function NoteLibrary() {
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const pageSize = 20;
@@ -22,19 +24,19 @@ export function NoteLibrary() {
    */
   const loadNotes = useCallback(async (pageNum: number) => {
     if (loading) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetchNotes(pageNum, pageSize);
-      
+
       if (pageNum === 1) {
         setNotes(response.notes);
       } else {
         setNotes(prev => [...prev, ...response.notes]);
       }
-      
+
       setHasMore(response.hasMore);
     } catch (err) {
       setError("加载笔记失败，请稍后重试");
@@ -54,10 +56,10 @@ export function NoteLibrary() {
    */
   const handleScroll = useCallback(() => {
     if (!containerRef.current || loading || !hasMore) return;
-    
+
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
     const scrollBottom = scrollHeight - scrollTop - clientHeight;
-    
+
     // 距离底部100px时触发加载
     if (scrollBottom < 100) {
       const nextPage = page + 1;
@@ -101,9 +103,19 @@ export function NoteLibrary() {
         {/* 双列网格布局 */}
         <div className="notes-grid">
           {notes.map((note, index) => (
-            <NoteCard key={`${note.id}-${index}`} note={note} />
+            <NoteCard
+              key={`${note.id}-${index}`}
+              note={note}
+              onClick={setSelectedNote}
+            />
           ))}
         </div>
+
+        {/* 笔记详情弹窗 */}
+        <NoteDetailModal
+          note={selectedNote}
+          onClose={() => setSelectedNote(null)}
+        />
 
         {/* 加载状态 */}
         {loading && (

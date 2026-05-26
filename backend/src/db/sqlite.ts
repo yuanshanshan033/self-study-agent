@@ -1,6 +1,10 @@
 import Database, { Database as DatabaseType } from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import dotenv from "dotenv";
+
+// 确保 .env 在数据库连接前加载
+dotenv.config({ path: path.resolve(__dirname, "..", "..", "..", ".env") });
 
 const DB_PATH = process.env.SQLITE_PATH || path.resolve(__dirname, "..", "..", "..", "data", "xiaohongshu.db");
 
@@ -18,25 +22,48 @@ db.exec(`
     title TEXT NOT NULL,
     url TEXT,
     cover_url TEXT,
+    images TEXT,
     action_type TEXT NOT NULL DEFAULT 'like',
     interest_score INTEGER,
     ai_summary TEXT,
-    original_content TEXT,
+    text TEXT,
     tags TEXT,
+    ai_tags TEXT,
     created_at TEXT NOT NULL DEFAULT (date('now'))
   )
 `);
+
+// 迁移：如果旧表缺少新字段，自动添加
+const columns = db.prepare("PRAGMA table_info(notes)").all() as { name: string }[];
+const columnNames = columns.map(c => c.name);
+if (!columnNames.includes("text")) {
+  db.exec("ALTER TABLE notes ADD COLUMN text TEXT");
+}
+if (!columnNames.includes("ai_tags")) {
+  db.exec("ALTER TABLE notes ADD COLUMN ai_tags TEXT");
+}
+if (!columnNames.includes("images")) {
+  db.exec("ALTER TABLE notes ADD COLUMN images TEXT");
+}
+if (!columnNames.includes("cover_url")) {
+  db.exec("ALTER TABLE notes ADD COLUMN cover_url TEXT");
+}
+if (columnNames.includes("original_content") && !columnNames.includes("text")) {
+  db.exec("UPDATE notes SET text = original_content WHERE text IS NULL AND original_content IS NOT NULL");
+}
 
 export interface Note {
   id: number;
   title: string;
   url: string | null;
   cover_url: string | null;
+  images: string | null;
   action_type: "like" | "bookmark";
   interest_score: number | null;
   ai_summary: string | null;
-  original_content: string | null;
+  text: string | null;
   tags: string | null;
+  ai_tags: string | null;
   created_at: string;
 }
 

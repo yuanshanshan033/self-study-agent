@@ -306,7 +306,7 @@ def collect_feed_items(page, count=FEED_COUNT_FOR_PROFILE):
 
                 cover_url = ""
                 try:
-                    cover_ele = item.ele(".cover img", timeout=1)
+                    cover_ele = item.ele(".cover img", timeout=6)
                     if cover_ele:
                         cover_url = cover_ele.attr("src") or ""
                 except Exception:
@@ -329,76 +329,127 @@ def collect_feed_items(page, count=FEED_COUNT_FOR_PROFILE):
 
 
 def get_page_content(page):
-    """提取当前详情页的完整内容"""
+    """提取当前详情页的文字内容（标题、文案、标签），不截图"""
     title = ""
     content = ""
-    images = []
     tags = []
     url = page.url
 
     # 等待详情页加载完成
-    time.sleep(2)
+    time.sleep(3)
 
     # 调试：打印当前URL
     print(f"  🔍 当前URL: {url}")
 
-    # 获取标题 - 尝试多种可能的选择器
-    title_selectors = [".title", "h1.title", ".note-title", "[class*='title']"]
-    for selector in title_selectors:
-        try:
-            title_ele = page.ele(selector, timeout=1)
-            if title_ele:
-                title = title_ele.text
-                if title.strip():
-                    print(f"  ✅ 标题选择器匹配: {selector}")
-                    break
-        except Exception as e:
-            pass
-
-    # 获取内容 - 尝试多种可能的选择器
-    content_selectors = [".desc", ".content", ".note-content", ".text", "[class*='desc']", "[class*='content']"]
-    for selector in content_selectors:
-        try:
-            content_ele = page.ele(selector, timeout=1)
-            if content_ele:
-                content = content_ele.text
-                if content.strip():
-                    print(f"  ✅ 内容选择器匹配: {selector}")
-                    break
-        except:
-            pass
-
-    # 获取图片 - 尝试多种可能的选择器
-    img_selectors = [".note-slider-img", "img", ".image img", ".slider img", ".note-image"]
-    for selector in img_selectors:
-        try:
-            img_eles = page.eles(selector, timeout=1)
-            if img_eles:
-                for img in img_eles[:6]:
-                    src = img.attr("src") or img.attr("data-src") or ""
-                    if src:
-                        images.append(src)
-                if images:
-                    print(f"  ✅ 图片选择器匹配: {selector}, 找到 {len(images)} 张")
-                    break
-        except:
-            pass
-
-    # 获取话题标签
+    # 获取标题 - 优先从 .note-content > .title 获取
     try:
-        tag_eles = page.eles(".tag", timeout=1)
-        for tag in tag_eles:
-            tag_text = tag.text
-            if tag_text:
-                tags.append(tag_text)
-    except:
-        pass
+        note_content = page.ele(".note-content", timeout=2)
+        if note_content:
+            title_ele = note_content.ele(".title", timeout=2)
+            if title_ele:
+                title = title_ele.text.strip()
+                if title:
+                    print(f"  ✅ 标题从 .note-content > .title 获取")
+    except Exception as e:
+        print(f"  ⚠️  从 .note-content > .title 获取标题失败: {e}")
+
+    # 如果上面没获取到，尝试全局选择器
+    if not title:
+        title_selectors = [".title", "h1.title", ".note-title", "[class*='title']"]
+        for selector in title_selectors:
+            try:
+                title_ele = page.ele(selector, timeout=1)
+                if title_ele:
+                    title = title_ele.text.strip()
+                    if title:
+                        print(f"  ✅ 标题选择器匹配: {selector}")
+                        break
+            except:
+                pass
+
+    # 获取文案内容和标签 - 从 .note-content > .desc 获取
+    text = ""
+    tags = []
+    try:
+        note_content = page.ele(".note-content", timeout=2)
+        if note_content:
+            desc_ele = note_content.ele(".desc", timeout=2)
+            if desc_ele:
+                print(f"  ✅ 找到 .note-content > .desc 元素")
+                # 获取所有 span 标签的文本（作者说的内容）
+                try:
+                    span_eles = desc_ele.eles("span", timeout=1)
+                    span_texts = []
+                    for span in span_eles:
+                        span_t = span.text.strip()
+                        if span_t:
+                            span_texts.append(span_t)
+                    text = "\n".join(span_texts)
+                    if text:
+                        print(f"  ✅ 文案从 .desc > span 获取，共 {len(span_texts)} 段")
+                except Exception as e:
+                    print(f"  ⚠️  获取 span 文本失败: {e}")
+
+                # 获取所有 .tag 标签的文本（话题标签）
+                try:
+                    tag_eles = desc_ele.eles(".tag", timeout=1)
+                    for tag in tag_eles:
+                        tag_text = tag.text.strip()
+                        if tag_text:
+                            tags.append(tag_text)
+                    if tags:
+                        print(f"  ✅ 标签从 .desc > .tag 获取，共 {len(tags)} 个")
+                except Exception as e:
+                    print(f"  ⚠️  获取 .tag 标签失败: {e}")
+            else:
+                print(f"  ⚠️  未找到 .desc 元素")
+        else:
+            print(f"  ⚠️  未找到 .note-content 元素")
+    except Exception as e:
+        print(f"  ⚠️  .note-content > .desc 获取失败: {e}")
+
+    # 兜底：如果上面没获取到文案，尝试其他选择器
+    if not text:
+        print(f"  ⚠️  主选择器未获取到文案，尝试兜底选择器...")
+        text_selectors = [".note-text", ".desc", ".content", "[class*='desc']", "[class*='content']"]
+        for selector in text_selectors:
+            try:
+                text_ele = page.ele(selector, timeout=2)
+                if text_ele:
+                    full_text = text_ele.text
+                    if full_text and full_text.strip():
+                        try:
+                            tag_eles = text_ele.eles(".tag", timeout=1)
+                            for tag_ele in tag_eles:
+                                tag_t = tag_ele.text
+                                if tag_t:
+                                    full_text = full_text.replace(tag_t, "")
+                        except:
+                            pass
+                        text = full_text.strip()
+                        if text:
+                            print(f"  ✅ 文案选择器匹配: {selector}")
+                            break
+            except:
+                pass
+
+    # 兜底：如果上面没获取到标签，尝试全局获取
+    if not tags:
+        try:
+            tag_eles = page.eles(".tag", timeout=1)
+            for tag in tag_eles:
+                tag_text = tag.text.strip()
+                if tag_text:
+                    tags.append(tag_text)
+            if tags:
+                print(f"  ✅ 标签从全局 .tag 获取，共 {len(tags)} 个")
+        except:
+            pass
 
     # 调试输出
-    if not title and not content and not images:
-        print(f"  ⚠️  未获取到内容，尝试打印页面结构...")
+    if not title and not text:
+        print(f"  ⚠️  未获取到文字内容，尝试打印页面结构...")
         try:
-            # 尝试获取页面所有文本
             body_text = page.ele("body").text[:200]
             print(f"  📝 页面文本前200字: {body_text}...")
         except:
@@ -406,11 +457,80 @@ def get_page_content(page):
 
     return {
         "title": title,
-        "content": content,
-        "images": images,
+        "text": text,
         "tags": tags,
         "url": url,
     }
+
+
+def screenshot_note_images(page):
+    """对当前详情页整页截图，返回截图路径列表（首图作为封面）"""
+    images = []
+    url = page.url
+
+    print("  📸 开始截图获取笔记图片...")
+    try:
+        import os
+        from config import SCREENSHOTS_DIR
+        
+        # 确保截图目录存在
+        os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
+        
+        # 获取图片总数（从 class="fraction" 中获取，格式如 "1/5"）
+        total_images = 1
+        current_index = 1
+        try:
+            fraction_ele = page.ele(".fraction", timeout=2)
+            if fraction_ele:
+                fraction_text = fraction_ele.text.strip()
+                print(f"  📊 当前页码: {fraction_text}")
+                if "/" in fraction_text:
+                    parts = fraction_text.split("/")
+                    current_index = int(parts[0])
+                    total_images = int(parts[1])
+                    print(f"  📊 当前第 {current_index} 张，共 {total_images} 张")
+        except Exception as e:
+            print(f"  ⚠️  获取页码失败，默认1张: {e}")
+        
+        # 生成笔记标识（用URL中的笔记ID，去掉查询参数）
+        note_id = url.rstrip("/").split("/")[-1].split("?")[0] if url else str(int(time.time()))
+        
+        # 逐张截图（整页截图）
+        for i in range(current_index, total_images + 1):
+            print(f"  📸 截取第 {i}/{total_images} 张图片...")
+            
+            # 等待图片加载
+            time.sleep(2)
+            
+            screenshot_path = os.path.join(SCREENSHOTS_DIR, f"{note_id}_{i}.png")
+            
+            try:
+                # 直接截取整个页面
+                page.get_screenshot(path=screenshot_path)
+                print(f"    ✅ 截图成功(整页): {screenshot_path}")
+                images.append(screenshot_path)
+            except Exception as e:
+                print(f"    ⚠️  截图失败: {e}")
+            
+            # 如果不是最后一张，点击下一张按钮
+            if i < total_images:
+                try:
+                    next_btn = page.ele(".arrow-controller.right", timeout=2)
+                    if next_btn:
+                        next_btn.click()
+                        time.sleep(2)
+                    else:
+                        print(f"    ⚠️  未找到下一张按钮，可能已到最后一张")
+                        break
+                except Exception as e:
+                    print(f"    ⚠️  点击下一张失败: {e}")
+                    break
+        
+        print(f"  ✅ 截图完成，共获取 {len(images)} 张图片")
+    except Exception as e:
+        print(f"  ⚠️  截图获取图片失败: {e}")
+
+    return images
 
 
 def click_note(page, note_element):

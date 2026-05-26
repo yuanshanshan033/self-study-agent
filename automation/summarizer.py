@@ -5,16 +5,16 @@ from analyzer import call_deepseek
 def summarize_note(note):
     """
     对一篇互动笔记生成结构化摘要
-    返回: dict 包含 ai_summary, tags 等
+    返回: dict 包含 ai_summary, ai_tags 等
     """
     title = note.get("title", "")
-    content = note.get("content", "")
+    text = note.get("text", "")
     action_type = note.get("action_type", "like")
 
     text_input = f"""请分析以下小红书笔记，生成结构化摘要。
 
 笔记标题: {title}
-笔记正文: {content}
+笔记正文: {text}
 用户互动: {"点赞+收藏" if action_type == "bookmark" else "点赞"}
 
 请用 JSON 格式返回，结构如下:
@@ -22,20 +22,20 @@ def summarize_note(note):
   "core_insight": "笔记核心观点（1-2句话概括）",
   "key_points": ["要点1", "要点2", "要点3"],
   "why_interested": "为什么用户会对这篇笔记感兴趣",
-  "tags": ["标签1", "标签2", "标签3", "标签4", "标签5"]
+  "ai_tags": ["标签1", "标签2", "标签3", "标签4", "标签5"]
 }}
 """
 
     messages = [{"role": "user", "content": text_input}]
     response = call_deepseek(messages, temperature=0.5, response_format="json_object")
     if not response:
-        return {"core_insight": "", "key_points": [], "why_interested": "", "tags": []}
+        return {"core_insight": "", "key_points": [], "why_interested": "", "ai_tags": []}
 
     try:
         result = json.loads(response)
         return result
     except json.JSONDecodeError:
-        return {"core_insight": title, "key_points": [], "why_interested": "", "tags": []}
+        return {"core_insight": title, "key_points": [], "why_interested": "", "ai_tags": []}
 
 
 def build_markdown_summary(summary_result):
@@ -64,10 +64,12 @@ def batch_summarize(notes):
             "title": note.get("title", ""),
             "url": note.get("url", ""),
             "cover_url": note.get("images", [None])[0] if note.get("images") else "",
+            "images": note.get("images", []),
             "action_type": note.get("action_type", "like"),
             "interest_score": note.get("interest_score", 0),
             "ai_summary": md,
-            "original_content": note.get("content", ""),
-            "tags": ", ".join(summary.get("tags", [])),
+            "text": note.get("text", ""),
+            "tags": ", ".join(note.get("tags", [])),
+            "ai_tags": ", ".join(summary.get("ai_tags", [])),
         })
     return summarized

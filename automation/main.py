@@ -170,9 +170,9 @@ class DailyTask:
             print("  ⚠️  点击详情失败")
             return
 
+        # 先获取文字内容（不截图）
         detail = browser.get_page_content(self.page)
-        print(f"  详情文字: {detail['content'][:80]}..." if detail["content"] else "  无文字内容")
-        print(f"  图片数量: {len(detail['images'])}")
+        print(f"  详情文字: {detail['text'][:80]}..." if detail["text"] else "  无文字内容")
 
         browser.human_pause(5.0, 12.0)
 
@@ -201,6 +201,10 @@ class DailyTask:
             browser.human_pause(2.0, 5.0)
             return
 
+        # 需要点赞/收藏，才截图保存图片
+        images = browser.screenshot_note_images(self.page)
+        print(f"  图片数量: {len(images)}")
+
         # 执行点赞
         print("  ❤️  执行点赞...")
         if browser.do_like(self.page):
@@ -220,8 +224,9 @@ class DailyTask:
         action_type = "bookmark" if bookmark_executed else "like"
         self.interacted_notes.append({
             "title": detail["title"],
-            "content": detail["content"],
-            "images": detail["images"],
+            "text": detail["text"],
+            "tags": detail["tags"],
+            "images": images,
             "url": detail["url"],
             "action_type": action_type,
             "interest_score": interest.get("interest_score", 0),
@@ -238,23 +243,56 @@ class DailyTask:
         """将总结后的笔记写入 SQLite"""
         conn = sqlite3.connect(SQLITE_PATH)
         cursor = conn.cursor()
+        
+        # 确保表存在（如果不存在则创建）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                url TEXT,
+                cover_url TEXT,
+                images TEXT,
+                action_type TEXT NOT NULL DEFAULT 'like',
+                interest_score INTEGER,
+                ai_summary TEXT,
+                text TEXT,
+                tags TEXT,
+                ai_tags TEXT,
+                created_at TEXT NOT NULL DEFAULT (date('now'))
+            )
+        """)
+        conn.commit()
+        
         today = datetime.now().strftime("%Y-%m-%d")
         saved = 0
         for note in summarized_notes:
             try:
+                # 获取图片列表，将绝对路径转为前端可访问的URL
+                images = note.get("images", [])
+                image_urls = []
+                for img_path in images:
+                    if img_path:
+                        # 从绝对路径提取文件名，转为 /screenshots/filename 格式
+                        filename = os.path.basename(img_path)
+                        image_urls.append(f"/screenshots/{filename}")
+                images_str = ",".join(image_urls) if image_urls else ""
+                cover_url = image_urls[0] if image_urls else ""
+                
                 cursor.execute("""
-                    INSERT INTO notes (title, url, cover_url, action_type, interest_score,
-                                       ai_summary, original_content, tags, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO notes (title, url, cover_url, images, action_type, interest_score,
+                                       ai_summary, text, tags, ai_tags, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     note.get("title", ""),
                     note.get("url", ""),
-                    note.get("cover_url", ""),
+                    cover_url,
+                    images_str,
                     note.get("action_type", "like"),
                     note.get("interest_score", 0),
                     note.get("ai_summary", ""),
-                    note.get("original_content", ""),
+                    note.get("text", ""),
                     note.get("tags", ""),
+                    note.get("ai_tags", ""),
                     today,
                 ))
                 saved += 1

@@ -7,11 +7,13 @@ export interface Note {
   title: string;
   url: string | null;
   cover_url: string | null;
+  images: string | null;
   action_type: "like" | "bookmark";
   interest_score: number | null;
   ai_summary: string | null;
-  original_content: string | null;
+  text: string | null;
   tags: string | null;
+  ai_tags: string | null;
   created_at: string;
   // 统计数据（模拟数据，实际应从后端获取）
   likes?: number;

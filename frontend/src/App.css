@@ -768,3 +768,308 @@ body {
     font-size: 18px;
   }
 }
+
+/* ============================================
+   笔记详情弹窗
+   ============================================ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: modalFadeIn 0.2s ease;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-container {
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  max-width: 600px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+  animation: modalSlideIn 0.3s ease;
+}
+
+/* 左右布局模式 */
+.modal-container.modal-horizontal {
+  display: flex;
+  max-width: 900px;
+  max-height: 80vh;
+  overflow: hidden;
+}
+
+.modal-left {
+  flex: 0 0 45%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.3);
+  border-right: 1px solid var(--color-border);
+}
+
+.modal-right {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all var(--transition-fast);
+}
+
+.modal-close:hover {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.1);
+}
+
+.modal-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* 图片区域 */
+.modal-image-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.modal-image-main img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.modal-image-thumbnails {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.modal-thumb {
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.modal-thumb:hover {
+  border-color: var(--color-accent);
+}
+
+.modal-thumb.active {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-light);
+}
+
+.modal-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+
+.modal-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.modal-meta .badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.modal-meta .badge.like {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.modal-meta .badge.bookmark {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.modal-score {
+  font-size: 12px;
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.modal-date {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* 标签 */
+.modal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.modal-tag {
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--color-bg-glass);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.modal-tag.ai-tag {
+  background: var(--color-accent-light);
+  color: var(--color-accent-hover);
+}
+
+/* 内容区块 */
+.modal-section {
+  margin-bottom: 16px;
+}
+
+.modal-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.modal-summary {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+}
+
+.modal-summary p {
+  margin-bottom: 8px;
+}
+
+.modal-summary h1,
+.modal-summary h2,
+.modal-summary h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 12px 0 8px;
+  color: var(--color-text-primary);
+}
+
+.modal-summary ul,
+.modal-summary ol {
+  margin-left: 16px;
+  margin-bottom: 8px;
+}
+
+.modal-summary li {
+  margin-bottom: 4px;
+}
+
+.modal-original {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.modal-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: white;
+  font-size: 13px;
+  text-decoration: none;
+  transition: background var(--transition-fast);
+}
+
+.modal-link:hover {
+  background: var(--color-accent-hover);
+}
+
+/* 弹窗滚动条 */
+.modal-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.modal-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
