@@ -30,8 +30,8 @@ class DailyTask:
         self.bookmark_count = 0
         self.interacted_notes = []
         self.start_time = None
-        self.like_probability = 0.8
-        self.bookmark_probability = 0.6
+        self.like_probability = 1.0   # 感兴趣直接点赞
+        self.bookmark_probability = 1.0  # 收藏由类别计数规则控制
         self.interact_cooldown = 0
         self.posts_since_last_interact = 0
         # 新增：类别计数器（每个画像类别单独计数）
@@ -185,21 +185,15 @@ class DailyTask:
         self.category_counters[matched_category] += 1
         category_count = self.category_counters[matched_category]
 
-        # 判断是否应该点赞（每3个同类笔记点赞一次）
-        should_like = (category_count % 3 == 0)
+        # 感兴趣的话题直接点赞
+        should_like = True
 
-        # 判断是否应该收藏（每5个笔记收藏一次）
-        should_bookmark = (self.total_notes_checked % 5 == 0)
+        # 同一类别每3个收藏一次
+        should_bookmark = (category_count % 3 == 0)
 
         print(f"  📊 类别计数:{category_count} | 总计数:{self.total_notes_checked}")
-        print(f"  🎯 点赞规则:每3个同类笔记点赞一次 {'✅' if should_like else '⏳'}")
-        print(f"  🎯 收藏规则:每5个笔记收藏一次 {'✅' if should_bookmark else '⏳'}")
-
-        if not should_like:
-            print("  ⌛ 未达到点赞条件，跳过")
-            browser.close_detail(self.page)
-            browser.human_pause(2.0, 5.0)
-            return
+        print(f"  🎯 点赞规则:感兴趣直接点赞 ✅")
+        print(f"  🎯 收藏规则:每3个同类笔记收藏一次 {'✅' if should_bookmark else '⏳'}")
 
         # 需要点赞/收藏，才截图保存图片
         images = browser.screenshot_note_images(self.page)

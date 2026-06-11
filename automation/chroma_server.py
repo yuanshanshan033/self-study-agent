@@ -37,5 +37,5 @@ def health():
 
 
 if __name__ == "__main__":
-    print(f"Chroma HTTP 服务启动 http://127.0.0.1:5002")
-    app.run(host="127.0.0.1", port=5002, threaded=True)
+    print(f"Chroma HTTP 服务启动 http://127.0.0.1:{CHROMA_SERVER_PORT}")
+    app.run(host="127.0.0.1", port=CHROMA_SERVER_PORT, threaded=True)

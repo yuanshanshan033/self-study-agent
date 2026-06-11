@@ -14,7 +14,7 @@ CHROMA_PATH = os.getenv("CHROMA_PATH", os.path.join(PROJECT_ROOT, "data", "chrom
 USER_PROFILE_PATH = os.path.join(PROJECT_ROOT, "data", "user_profile.json")
 SCREENSHOTS_DIR = os.path.join(PROJECT_ROOT, "data", "screenshots")
 
-CHROMA_SERVER_PORT = int(os.getenv("PYTHON_CHROMA_PORT", "5001"))
+CHROMA_SERVER_PORT = int(os.getenv("PYTHON_CHROMA_PORT", "5002"))
 
 MAX_DAILY_LIKES = 15
 MAX_DAILY_BOOKMARKS = 5

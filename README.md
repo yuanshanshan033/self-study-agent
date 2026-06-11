@@ -13,16 +13,59 @@
 
 ## 技术选型
 
-| 层级 | 技术 | 说明 |
-|------|------|------|
-| 浏览器自动化 | Python + DrissionPage | 强大的反检测自动化库，支持拟人化行为 |
-| LLM | DeepSeek API | 调用 OpenAI 兼容 SDK |
-| 自动化调度 | Python `schedule` 库 | 代码内定时器，每天早上 9:00 触发 |
-| 后端 API | Node.js + TypeScript + Express | 提供 REST API 服务 |
-| 关系数据库 | SQLite | 存储笔记摘要数据 |
-| 向量数据库 | Chroma (Python 原生库) | 存储笔记向量，支持 RAG 问答 |
-| 前端 | React + TypeScript + Vite | 单页面展示 + 对话面板 |
-| 进程通信 | Python 自动化 → 直写 SQLite / Chroma；Node.js → 子进程调用 Python 问答服务 | 共享数据 + 代理转发 |
+
+| 层级         | 技术                                                                         | 说明                                 |
+| ------------ | ---------------------------------------------------------------------------- | ------------------------------------ |
+| 浏览器自动化 | Python + DrissionPage                                                        | 强大的反检测自动化库，支持拟人化行为 |
+| LLM          | DeepSeek API                                                                 | 调用 OpenAI 兼容 SDK                 |
+| 自动化调度   | Python`schedule` 库                                                          | 代码内定时器，每天早上 9:00 触发     |
+| 后端 API     | Node.js + TypeScript + Express                                               | 提供 REST API 服务                   |
+| 关系数据库   | SQLite                                                                       | 存储笔记摘要数据                     |
+| 向量数据库   | Chroma (Python 原生库)                                                       | 存储笔记向量，支持 RAG 问答          |
+| 前端         | React + TypeScript + Vite                                                    | 单页面展示 + 对话面板                |
+| 进程通信     | Python 自动化 → 直写 SQLite / Chroma；Node.js → 子进程调用 Python 问答服务 | 共享数据 + 代理转发                  |
+
+---
+
+## 项目运行命令
+
+### 服务启动（日常开发）
+
+
+| 顺序 | 服务            | 命令                      | 目录          | 端口 | 前置依赖     |
+| ---- | --------------- | ------------------------- | ------------- | ---- | ------------ |
+| 1    | Chroma 向量服务 | `python chroma_server.py` | `automation/` | 5002 | 无           |
+| 2    | Express 后端    | `npm run dev`             | `backend/`    | 3001 | Chroma 服务  |
+| 3    | React 前端      | `npm run dev`             | `frontend/`   | 5173 | Express 后端 |
+
+### 自动化任务（按需执行）
+
+
+| 命令                        | 目录          | 说明                                       |
+| --------------------------- | ------------- | ------------------------------------------ |
+| `python main.py --profile`  | `automation/` | 采集发现页 50 篇帖子，AI 生成用户画像      |
+| `python main.py --daily`    | `automation/` | 运行一次完整的浏览 + 互动 + 存储流程       |
+| `python main.py --schedule` | `automation/` | 启动定时调度器，每天 9:00 自动执行每日任务 |
+
+### 数据库管理
+
+
+| 命令                                                          | 说明                                                 |
+| ------------------------------------------------------------- | ---------------------------------------------------- |
+| `sqlite3 data/xiaohongshu.db`                                 | 命令行打开 SQLite 数据库                             |
+| `sqlite_web --host 127.0.0.1 --port 8080 data/xiaohongshu.db` | 网页打开 SQLite 数据库（需`pip install sqlite-web`） |
+| http://127.0.0.1:8080                                         | 网页输入网址 打开SQLite数据库                        |
+
+### 启动顺序说明
+
+```
+Chroma 服务 (5002) ──必须先启动──▶ Express 后端 (3001)
+                                      │
+                                      ▼
+                               React 前端 (5173)
+```
+
+> 日常开发只需启动前 3 个服务，自动化任务按需单独运行。SQLite 为文件型数据库，无需单独启动。
 
 ---
 
@@ -225,18 +268,19 @@ self-study-agent/
 
 在 Python 的 `automation/` 模块中创建建表脚本（也可作为初始化脚本单独放在 `data/` 下），表结构如下：
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | INTEGER PRIMARY KEY | 自增主键 |
-| title | TEXT | 笔记标题 |
-| url | TEXT | 笔记链接 |
-| cover_url | TEXT | 封面图 URL |
-| action_type | TEXT | 互动类型：like / bookmark |
-| interest_score | INTEGER | 兴趣评分 1-10 |
-| ai_summary | TEXT | AI 生成的笔记摘要（Markdown 格式） |
-| original_content | TEXT | 笔记原始文字内容 |
-| tags | TEXT | AI 提取的标签（逗号分隔） |
-| created_at | TEXT | 爬取日期（YYYY-MM-DD） |
+
+| 字段             | 类型                | 说明                               |
+| ---------------- | ------------------- | ---------------------------------- |
+| id               | INTEGER PRIMARY KEY | 自增主键                           |
+| title            | TEXT                | 笔记标题                           |
+| url              | TEXT                | 笔记链接                           |
+| cover_url        | TEXT                | 封面图 URL                         |
+| action_type      | TEXT                | 互动类型：like / bookmark          |
+| interest_score   | INTEGER             | 兴趣评分 1-10                      |
+| ai_summary       | TEXT                | AI 生成的笔记摘要（Markdown 格式） |
+| original_content | TEXT                | 笔记原始文字内容                   |
+| tags             | TEXT                | AI 提取的标签（逗号分隔）          |
+| created_at       | TEXT                | 爬取日期（YYYY-MM-DD）             |
 
 ---
 
@@ -531,12 +575,14 @@ while True:
 **8.1 端到端集成测试**
 
 启动顺序：
+
 1. 启动 Python 自动化进程（后台运行，等待定时触发）。
 2. 启动 Python chroma_server（端口 5001）。
 3. 启动 Node.js 后端（端口 3001）。
 4. 启动 React 前端（端口 5173）。
 
 测试流程：
+
 - 访问前端页面，确认笔记列表正常加载。
 - 在对话面板提问，确认流式回答正常返回。
 - 手动触发一次 Python 自动化任务，确认数据能正确入库并更新前端显示。
